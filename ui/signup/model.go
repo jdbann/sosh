@@ -1,4 +1,4 @@
-package main
+package signup
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,17 +17,22 @@ type UserStore interface {
 	AddUser(ssh.PublicKey, string) error
 }
 
-type signupModel struct {
+type Model struct {
 	key   ssh.PublicKey
 	form  *huh.Form
 	err   error
 	store UserStore
 }
 
-func newSignupModel(store UserStore, key ssh.PublicKey) signupModel {
-	m := signupModel{
-		key:   key,
-		store: store,
+type Params struct {
+	PublicKey ssh.PublicKey
+	Store     UserStore
+}
+
+func NewModel(params Params) Model {
+	m := Model{
+		key:   params.PublicKey,
+		store: params.Store,
 	}
 
 	m.form = huh.NewForm(
@@ -42,11 +47,11 @@ func newSignupModel(store UserStore, key ssh.PublicKey) signupModel {
 	return m
 }
 
-func (m signupModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m signupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -68,7 +73,7 @@ func (m signupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m signupModel) View() string {
+func (m Model) View() string {
 	if m.err != nil {
 		return m.err.Error()
 	}
@@ -88,15 +93,15 @@ func registerCmd(store UserStore, key ssh.PublicKey, name string) tea.Cmd {
 			return registrationErrMsg(err)
 		}
 
-		return registeredMsg{
-			user: u,
+		return RegisteredMsg{
+			User: u,
 		}
 	}
 }
 
 type (
-	registeredMsg struct {
-		user store.User
+	RegisteredMsg struct {
+		User store.User
 	}
 	registrationErrMsg error
 )

@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/wish/logging"
 	"github.com/jdbann/sosh/store"
 	"github.com/jdbann/sosh/ui/feed"
+	"github.com/jdbann/sosh/ui/signup"
 )
 
 const (
@@ -94,7 +95,10 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	}
 
 	if u.Key == nil {
-		m.screen = newSignupModel(globalStore, sess.PublicKey())
+		m.screen = signup.NewModel(signup.Params{
+			PublicKey: sess.PublicKey(),
+			Store:     globalStore,
+		})
 	} else {
 		m.screen = feed.NewModel(feed.Params{
 			Store:    globalStore,
@@ -139,8 +143,8 @@ func (m clientModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-	case registeredMsg:
-		m.user = msg.user
+	case signup.RegisteredMsg:
+		m.user = msg.User
 		m.screen = feed.NewModel(feed.Params{
 			Store:    globalStore,
 			Username: m.user.Name,
