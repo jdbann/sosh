@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
 	"github.com/jdbann/sosh/store"
+	"github.com/jdbann/sosh/ui"
 )
 
 const (
@@ -93,15 +94,12 @@ func registerCmd(store UserStore, key ssh.PublicKey, name string) tea.Cmd {
 			return registrationErrMsg(err)
 		}
 
-		return RegisteredMsg{
+		return ui.LoggedInMsg{
 			User: u,
 		}
 	}
 }
 
 type (
-	RegisteredMsg struct {
-		User store.User
-	}
 	registrationErrMsg error
 )

@@ -1,11 +1,14 @@
 package client
 
 import (
+	"errors"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/ssh"
 	"github.com/jdbann/sosh/store"
+	"github.com/jdbann/sosh/ui"
 	"github.com/jdbann/sosh/ui/feed"
 	"github.com/jdbann/sosh/ui/signup"
 )
@@ -23,7 +26,8 @@ type Model struct {
 	width  int
 	height int
 
-	user store.User
+	user      store.User
+	publicKey ssh.PublicKey
 
 	screen tea.Model
 
@@ -34,22 +38,22 @@ type Model struct {
 }
 
 type Params struct {
-	Width    int
-	Height   int
-	User     store.User
-	Store    Store
-	Lipgloss *lipgloss.Renderer
-	Screen   tea.Model
+	Width     int
+	Height    int
+	PublicKey ssh.PublicKey
+	Store     Store
+	Lipgloss  *lipgloss.Renderer
 }
 
 func NewModel(params Params) Model {
 	m := Model{
-		width:  params.Width,
-		height: params.Height,
-		user:   params.User,
-		screen: params.Screen,
-		lg:     params.Lipgloss,
-		store:  params.Store,
+		width:       params.Width,
+		height:      params.Height,
+		publicKey:   params.PublicKey,
+		lg:          params.Lipgloss,
+		bannerStyle: lipgloss.Style{},
+		quitStyle:   lipgloss.Style{},
+		store:       params.Store,
 	}
 
 	m.bannerStyle = m.lg.NewStyle().Foreground(lipgloss.Color("10")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("10")).Padding(1, 5)
@@ -59,11 +63,7 @@ func NewModel(params Params) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.screen != nil {
-		return m.screen.Init()
-	}
-
-	return nil
+	return getUser(m.store, m.publicKey)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -78,7 +78,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-	case signup.RegisteredMsg:
+	case mustLogInMsg:
+		m.screen = signup.NewModel(signup.Params{
+			PublicKey: m.publicKey,
+			Store:     m.store,
+		})
+		cmds = append(cmds, m.screen.Init())
+	case ui.LoggedInMsg:
 		m.user = msg.User
 		m.screen = feed.NewModel(feed.Params{
 			Store:    m.store,
@@ -107,3 +113,24 @@ func (m Model) View() string {
 		m.quitStyle.Render("Press q to quit"),
 	)
 }
+
+func getUser(st Store, key ssh.PublicKey) tea.Cmd {
+	return func() tea.Msg {
+		user, err := st.GetUser(key)
+		if err != nil {
+			if errors.Is(err, store.ErrUnknownUser) {
+				return mustLogInMsg{}
+			}
+			return errMsg(err)
+		}
+
+		return ui.LoggedInMsg{
+			User: user,
+		}
+	}
+}
+
+type (
+	mustLogInMsg struct{}
+	errMsg       error
+)

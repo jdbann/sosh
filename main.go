@@ -18,8 +18,6 @@ import (
 	"github.com/charmbracelet/wish/logging"
 	"github.com/jdbann/sosh/store"
 	"github.com/jdbann/sosh/ui/client"
-	"github.com/jdbann/sosh/ui/feed"
-	"github.com/jdbann/sosh/ui/signup"
 )
 
 const (
@@ -70,36 +68,13 @@ var globalStore = &store.MemoryStore{}
 func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := sess.Pty()
 
-	renderer := bubbletea.MakeRenderer(sess)
-
-	u, err := globalStore.GetUser(sess.PublicKey())
-	if err != nil && !errors.Is(err, store.ErrUnknownUser) {
-		log.Error("Could not get user", "error", err)
-		return nil, nil
-	}
-
-	params := client.Params{
-		Width:    pty.Window.Width,
-		Height:   pty.Window.Height,
-		User:     u,
-		Store:    globalStore,
-		Lipgloss: renderer,
-	}
-
-	if u.Key == nil {
-		params.Screen = signup.NewModel(signup.Params{
-			PublicKey: sess.PublicKey(),
-			Store:     globalStore,
-		})
-	} else {
-		params.Screen = feed.NewModel(feed.Params{
-			Store:    globalStore,
-			Username: u.Name,
-			Lipgloss: renderer,
-		})
-	}
-
-	m := client.NewModel(params)
+	m := client.NewModel(client.Params{
+		Width:     pty.Window.Width,
+		Height:    pty.Window.Height,
+		PublicKey: sess.PublicKey(),
+		Store:     globalStore,
+		Lipgloss:  bubbletea.MakeRenderer(sess),
+	})
 
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
