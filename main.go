@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,9 @@ func main() {
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(".ssh/id_ed25519"),
+		wish.WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
+			return key.Type() == "ssh-ed25519"
+		}),
 		wish.WithMiddleware(
 			bubbletea.Middleware(soshHandler),
 			activeterm.Middleware(),
@@ -68,13 +72,26 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	bannerStyle := renderer.NewStyle().Foreground(lipgloss.Color("10")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("10")).Padding(1, 5)
 	quitStyle := renderer.NewStyle().Foreground(lipgloss.Color("8"))
 
+	u, err := getUser(sess.PublicKey())
+	if err != nil && !errors.Is(err, errUnknownUser) {
+		log.Error("Could not get user", "error", err)
+		return nil, nil
+	}
+
 	m := clientModel{
 		width:  pty.Window.Width,
 		height: pty.Window.Height,
 
+		user: u,
+
 		bannerStyle: bannerStyle,
 		quitStyle:   quitStyle,
 	}
+
+	if u.key == nil {
+		m.screen = newSignupModel(sess.PublicKey())
+	}
+
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
 
@@ -82,15 +99,25 @@ type clientModel struct {
 	width  int
 	height int
 
+	user user
+
+	screen tea.Model
+
 	bannerStyle lipgloss.Style
 	quitStyle   lipgloss.Style
 }
 
 func (m clientModel) Init() tea.Cmd {
+	if m.screen != nil {
+		return m.screen.Init()
+	}
+
 	return nil
 }
 
 func (m clientModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
@@ -100,13 +127,27 @@ func (m clientModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
+	case registeredMsg:
+		m.user = msg.user
+		m.screen = nil
 	}
-	return m, nil
+
+	if m.screen != nil {
+		screen, cmd := m.screen.Update(msg)
+		m.screen = screen
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m clientModel) View() string {
+	if m.screen != nil {
+		return m.screen.View()
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Right,
-		lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.bannerStyle.Render(banner)),
+		lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.bannerStyle.Render(strings.Join([]string{banner, m.user.name}, " "))),
 		m.quitStyle.Render("Press q to quit"),
 	)
 }
