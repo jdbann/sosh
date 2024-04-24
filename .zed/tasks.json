@@ -1,0 +1,9 @@
+[
+  {
+    "label": "Watch",
+    "command": "air",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]
