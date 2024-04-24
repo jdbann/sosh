@@ -4,7 +4,7 @@ A simple social media application. Access it via SSH. Use your public keys to au
 
 ## Progress
 
-- [ ] Setup a basic [bubbletea] app that can be reached via SSH using [wish]
+- [x] Setup a basic [bubbletea] app that can be reached via SSH using [wish]
 - [ ] Add user registration and authentication via [public key auth] (persistened in memory)
 - [ ] Add posting and reading (persisted in memory)
 - [ ] Add a persistent [SQLite] store
