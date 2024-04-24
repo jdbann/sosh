@@ -18,6 +18,8 @@ import (
 	"github.com/charmbracelet/wish/activeterm"
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
+	"github.com/jdbann/sosh/store"
+	"github.com/jdbann/sosh/ui/feed"
 )
 
 const (
@@ -65,6 +67,8 @@ func main() {
 	}
 }
 
+var globalStore = &store.MemoryStore{}
+
 func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := sess.Pty()
 
@@ -86,10 +90,17 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 
 		bannerStyle: bannerStyle,
 		quitStyle:   quitStyle,
+		lg:          renderer,
 	}
 
 	if u.key == nil {
 		m.screen = newSignupModel(sess.PublicKey())
+	} else {
+		m.screen = feed.NewModel(feed.Params{
+			Store:    globalStore,
+			Username: u.name,
+			Lipgloss: renderer,
+		})
 	}
 
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
@@ -103,6 +114,7 @@ type clientModel struct {
 
 	screen tea.Model
 
+	lg          *lipgloss.Renderer
 	bannerStyle lipgloss.Style
 	quitStyle   lipgloss.Style
 }
@@ -129,7 +141,12 @@ func (m clientModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case registeredMsg:
 		m.user = msg.user
-		m.screen = nil
+		m.screen = feed.NewModel(feed.Params{
+			Store:    globalStore,
+			Username: m.user.name,
+			Lipgloss: m.lg,
+		})
+		cmds = append(cmds, m.screen.Init())
 	}
 
 	if m.screen != nil {
