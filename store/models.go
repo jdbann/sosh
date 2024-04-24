@@ -7,3 +7,8 @@ type Post struct {
 	Body        string
 	PublishedAt time.Time
 }
+
+type User struct {
+	Name string
+	Key  []byte
+}

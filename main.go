@@ -76,8 +76,8 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	bannerStyle := renderer.NewStyle().Foreground(lipgloss.Color("10")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("10")).Padding(1, 5)
 	quitStyle := renderer.NewStyle().Foreground(lipgloss.Color("8"))
 
-	u, err := getUser(sess.PublicKey())
-	if err != nil && !errors.Is(err, errUnknownUser) {
+	u, err := globalStore.GetUser(sess.PublicKey())
+	if err != nil && !errors.Is(err, store.ErrUnknownUser) {
 		log.Error("Could not get user", "error", err)
 		return nil, nil
 	}
@@ -93,12 +93,12 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 		lg:          renderer,
 	}
 
-	if u.key == nil {
-		m.screen = newSignupModel(sess.PublicKey())
+	if u.Key == nil {
+		m.screen = newSignupModel(globalStore, sess.PublicKey())
 	} else {
 		m.screen = feed.NewModel(feed.Params{
 			Store:    globalStore,
-			Username: u.name,
+			Username: u.Name,
 			Lipgloss: renderer,
 		})
 	}
@@ -110,7 +110,7 @@ type clientModel struct {
 	width  int
 	height int
 
-	user user
+	user store.User
 
 	screen tea.Model
 
@@ -143,7 +143,7 @@ func (m clientModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.user = msg.user
 		m.screen = feed.NewModel(feed.Params{
 			Store:    globalStore,
-			Username: m.user.name,
+			Username: m.user.Name,
 			Lipgloss: m.lg,
 		})
 		cmds = append(cmds, m.screen.Init())
@@ -164,7 +164,7 @@ func (m clientModel) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Right,
-		lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.bannerStyle.Render(strings.Join([]string{banner, m.user.name}, " "))),
+		lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.bannerStyle.Render(strings.Join([]string{banner, m.user.Name}, " "))),
 		m.quitStyle.Render("Press q to quit"),
 	)
 }

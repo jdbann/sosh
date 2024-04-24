@@ -5,21 +5,29 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
+	"github.com/jdbann/sosh/store"
 )
 
 const (
 	nameKey = "name"
 )
 
-type signupModel struct {
-	key  ssh.PublicKey
-	form *huh.Form
-	err  error
+type UserStore interface {
+	GetUser(ssh.PublicKey) (store.User, error)
+	AddUser(ssh.PublicKey, string) error
 }
 
-func newSignupModel(key ssh.PublicKey) signupModel {
+type signupModel struct {
+	key   ssh.PublicKey
+	form  *huh.Form
+	err   error
+	store UserStore
+}
+
+func newSignupModel(store UserStore, key ssh.PublicKey) signupModel {
 	m := signupModel{
-		key: key,
+		key:   key,
+		store: store,
 	}
 
 	m.form = huh.NewForm(
@@ -54,7 +62,7 @@ func (m signupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.form.State == huh.StateCompleted {
-		cmds = append(cmds, registerCmd(m.key, m.form.GetString(nameKey)))
+		cmds = append(cmds, registerCmd(m.store, m.key, m.form.GetString(nameKey)))
 	}
 
 	return m, tea.Batch(cmds...)
@@ -67,14 +75,14 @@ func (m signupModel) View() string {
 	return m.form.View()
 }
 
-func registerCmd(key ssh.PublicKey, name string) tea.Cmd {
+func registerCmd(store UserStore, key ssh.PublicKey, name string) tea.Cmd {
 	return func() tea.Msg {
-		if err := addUser(key, name); err != nil {
+		if err := store.AddUser(key, name); err != nil {
 			log.Error("Registering user", "error", err)
 			return registrationErrMsg(err)
 		}
 
-		u, err := getUser(key)
+		u, err := store.GetUser(key)
 		if err != nil {
 			log.Error("Getting user", "error", err)
 			return registrationErrMsg(err)
@@ -88,7 +96,7 @@ func registerCmd(key ssh.PublicKey, name string) tea.Cmd {
 
 type (
 	registeredMsg struct {
-		user user
+		user store.User
 	}
 	registrationErrMsg error
 )
