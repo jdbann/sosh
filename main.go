@@ -6,12 +6,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
@@ -19,6 +17,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/jdbann/sosh/store"
+	"github.com/jdbann/sosh/ui/client"
 	"github.com/jdbann/sosh/ui/feed"
 	"github.com/jdbann/sosh/ui/signup"
 )
@@ -26,8 +25,6 @@ import (
 const (
 	host = "localhost"
 	port = "23234"
-
-	banner = "We're not ready to get sosh(al) yet..."
 )
 
 // connect with: ssh -p 23234 localhost
@@ -74,8 +71,6 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := sess.Pty()
 
 	renderer := bubbletea.MakeRenderer(sess)
-	bannerStyle := renderer.NewStyle().Foreground(lipgloss.Color("10")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("10")).Padding(1, 5)
-	quitStyle := renderer.NewStyle().Foreground(lipgloss.Color("8"))
 
 	u, err := globalStore.GetUser(sess.PublicKey())
 	if err != nil && !errors.Is(err, store.ErrUnknownUser) {
@@ -83,92 +78,28 @@ func soshHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 		return nil, nil
 	}
 
-	m := clientModel{
-		width:  pty.Window.Width,
-		height: pty.Window.Height,
-
-		user: u,
-
-		bannerStyle: bannerStyle,
-		quitStyle:   quitStyle,
-		lg:          renderer,
+	params := client.Params{
+		Width:    pty.Window.Width,
+		Height:   pty.Window.Height,
+		User:     u,
+		Store:    globalStore,
+		Lipgloss: renderer,
 	}
 
 	if u.Key == nil {
-		m.screen = signup.NewModel(signup.Params{
+		params.Screen = signup.NewModel(signup.Params{
 			PublicKey: sess.PublicKey(),
 			Store:     globalStore,
 		})
 	} else {
-		m.screen = feed.NewModel(feed.Params{
+		params.Screen = feed.NewModel(feed.Params{
 			Store:    globalStore,
 			Username: u.Name,
 			Lipgloss: renderer,
 		})
 	}
 
+	m := client.NewModel(params)
+
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
-}
-
-type clientModel struct {
-	width  int
-	height int
-
-	user store.User
-
-	screen tea.Model
-
-	lg          *lipgloss.Renderer
-	bannerStyle lipgloss.Style
-	quitStyle   lipgloss.Style
-}
-
-func (m clientModel) Init() tea.Cmd {
-	if m.screen != nil {
-		return m.screen.Init()
-	}
-
-	return nil
-}
-
-func (m clientModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.height = msg.Height
-		m.width = msg.Width
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		}
-	case signup.RegisteredMsg:
-		m.user = msg.User
-		m.screen = feed.NewModel(feed.Params{
-			Store:    globalStore,
-			Username: m.user.Name,
-			Lipgloss: m.lg,
-		})
-		cmds = append(cmds, m.screen.Init())
-	}
-
-	if m.screen != nil {
-		screen, cmd := m.screen.Update(msg)
-		m.screen = screen
-		cmds = append(cmds, cmd)
-	}
-
-	return m, tea.Batch(cmds...)
-}
-
-func (m clientModel) View() string {
-	if m.screen != nil {
-		return m.screen.View()
-	}
-
-	return lipgloss.JoinVertical(lipgloss.Right,
-		lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.bannerStyle.Render(strings.Join([]string{banner, m.user.Name}, " "))),
-		m.quitStyle.Render("Press q to quit"),
-	)
 }
