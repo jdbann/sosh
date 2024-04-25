@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/charmbracelet/ssh"
 )
@@ -22,7 +23,7 @@ func (s *MemoryStore) GetPosts() ([]Post, error) {
 }
 
 func (s *MemoryStore) AddPost(post Post) error {
-	s.Posts = append(s.Posts, post)
+	s.Posts = slices.Insert(s.Posts, 0, post)
 	return nil
 }
 
